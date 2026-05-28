@@ -25,23 +25,32 @@ public class ChatHub : Hub
 
         if (!string.IsNullOrWhiteSpace(username))
         {
-            // Katılımcı: DB'ye kaydet, herkese yayınla
-            var existing = await _db.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (existing != null)
-                existing.ConnectionId = Context.ConnectionId;
-            else
-                _db.Users.Add(new User { Id = Guid.NewGuid(), Username = username, ConnectionId = Context.ConnectionId });
+            var appUser = await _db.AppUsers
+                .FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower());
 
-            await _db.SaveChangesAsync();
+            if (appUser != null)
+            {
+                appUser.IsOnline = true;
+                appUser.ConnectionId = Context.ConnectionId;
+                await _db.SaveChangesAsync();
+            }
 
-            var activeUsers = await _db.Users.Select(u => u.Username).ToListAsync();
-            await Clients.All.SendAsync("UpdateUsers", activeUsers);
+            var onlineUsers = await _db.AppUsers
+                .Where(u => u.IsOnline)
+                .Select(u => u.Username)
+                .ToListAsync();
+
+            await Clients.All.SendAsync("UpdateUsers", onlineUsers);
         }
         else
         {
-            // Gözlemci: sadece mevcut durumu gönder, listeyi değiştirme
-            var activeUsers = await _db.Users.Select(u => u.Username).ToListAsync();
-            await Clients.Caller.SendAsync("UpdateUsers", activeUsers);
+            // Gözlemci: sadece mevcut durumu gönder
+            var onlineUsers = await _db.AppUsers
+                .Where(u => u.IsOnline)
+                .Select(u => u.Username)
+                .ToListAsync();
+
+            await Clients.Caller.SendAsync("UpdateUsers", onlineUsers);
         }
 
         await Clients.Caller.SendAsync("UpdateRooms", _rooms.GetRooms());
@@ -54,14 +63,22 @@ public class ChatHub : Hub
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.ConnectionId == Context.ConnectionId);
-        if (user != null)
+        var appUser = await _db.AppUsers
+            .FirstOrDefaultAsync(u => u.ConnectionId == Context.ConnectionId);
+
+        if (appUser != null)
         {
-            _db.Users.Remove(user);
+            appUser.IsOnline = false;
+            appUser.ConnectionId = null;
+            appUser.LastSeenAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
-            var activeUsers = await _db.Users.Select(u => u.Username).ToListAsync();
-            await Clients.All.SendAsync("UpdateUsers", activeUsers);
+            var onlineUsers = await _db.AppUsers
+                .Where(u => u.IsOnline)
+                .Select(u => u.Username)
+                .ToListAsync();
+
+            await Clients.All.SendAsync("UpdateUsers", onlineUsers);
         }
 
         _rooms.RemoveConnection(Context.ConnectionId);

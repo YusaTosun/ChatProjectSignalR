@@ -31,9 +31,11 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
-    // Uygulama yeniden başlarken tüm SignalR bağlantıları sıfırlanır;
-    // DB'de kalan kullanıcı kayıtları artık geçersizdir.
-    db.Users.ExecuteDelete();
+    // Uygulama yeniden başlarken tüm SignalR bağlantıları kopar;
+    // tüm kullanıcıları offline olarak işaretle.
+    db.AppUsers.ExecuteUpdate(s => s
+        .SetProperty(u => u.IsOnline, false)
+        .SetProperty(u => u.ConnectionId, (string?)null));
 }
 
 app.UseCors("MvcClient");
