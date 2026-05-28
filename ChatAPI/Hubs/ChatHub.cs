@@ -21,23 +21,34 @@ public class ChatHub : Hub
 
     public override async Task OnConnectedAsync()
     {
-        var username = Context.GetHttpContext()?.Request.Query["username"].ToString() ?? "Anonymous";
+        var username = Context.GetHttpContext()?.Request.Query["username"].ToString();
 
-        var existing = await _db.Users.FirstOrDefaultAsync(u => u.Username == username);
-        if (existing != null)
-            existing.ConnectionId = Context.ConnectionId;
+        if (!string.IsNullOrWhiteSpace(username))
+        {
+            // Katılımcı: DB'ye kaydet, herkese yayınla
+            var existing = await _db.Users.FirstOrDefaultAsync(u => u.Username == username);
+            if (existing != null)
+                existing.ConnectionId = Context.ConnectionId;
+            else
+                _db.Users.Add(new User { Id = Guid.NewGuid(), Username = username, ConnectionId = Context.ConnectionId });
+
+            await _db.SaveChangesAsync();
+
+            var activeUsers = await _db.Users.Select(u => u.Username).ToListAsync();
+            await Clients.All.SendAsync("UpdateUsers", activeUsers);
+        }
         else
-            _db.Users.Add(new User { Id = Guid.NewGuid(), Username = username, ConnectionId = Context.ConnectionId });
+        {
+            // Gözlemci: sadece mevcut durumu gönder, listeyi değiştirme
+            var activeUsers = await _db.Users.Select(u => u.Username).ToListAsync();
+            await Clients.Caller.SendAsync("UpdateUsers", activeUsers);
+        }
 
-        await _db.SaveChangesAsync();
-
-        var activeUsers = await _db.Users.Select(u => u.Username).ToListAsync();
-        await Clients.All.SendAsync("UpdateUsers", activeUsers);
-
-        // Yeni bağlanan kullanıcıya mevcut odaları gönder
         await Clients.Caller.SendAsync("UpdateRooms", _rooms.GetRooms());
 
-        _logger.LogInformation("Connected: {ConnectionId} as {Username}", Context.ConnectionId, username);
+        _logger.LogInformation("Connected: {ConnectionId} ({Mode})",
+            Context.ConnectionId, string.IsNullOrWhiteSpace(username) ? "observer" : username);
+
         await base.OnConnectedAsync();
     }
 
@@ -48,12 +59,12 @@ public class ChatHub : Hub
         {
             _db.Users.Remove(user);
             await _db.SaveChangesAsync();
+
+            var activeUsers = await _db.Users.Select(u => u.Username).ToListAsync();
+            await Clients.All.SendAsync("UpdateUsers", activeUsers);
         }
 
         _rooms.RemoveConnection(Context.ConnectionId);
-
-        var activeUsers = await _db.Users.Select(u => u.Username).ToListAsync();
-        await Clients.All.SendAsync("UpdateUsers", activeUsers);
         await Clients.All.SendAsync("UpdateRooms", _rooms.GetRooms());
 
         _logger.LogInformation("Disconnected: {ConnectionId}", Context.ConnectionId);

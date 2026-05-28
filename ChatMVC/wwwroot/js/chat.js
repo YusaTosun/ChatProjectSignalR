@@ -67,13 +67,16 @@ function renderRooms(rooms) {
             const roomName = li.dataset.room;
             if (roomName === currentRoom) return;
 
-            if (!currentUser) { usernameInput.focus(); return; }
+            // Kullanıcı adı girilmemişse odur inputa odaklan
+            if (!usernameInput.value.trim()) {
+                usernameInput.focus();
+                return;
+            }
 
-            const isConnected = connection && connection.state === signalR.HubConnectionState.Connected;
-            if (!isConnected) {
-                // kullanıcı henüz bağlanmamış — oda adını input'a doldur
+            // Gözlemci modundaysa tam katılımcı olarak bağlan
+            if (!currentUser) {
                 roomInput.value = roomName;
-                roomInput.focus();
+                joinBtn.click();
                 return;
             }
 
@@ -121,10 +124,43 @@ function scrollToBottom() {
     messages.scrollTop = messages.scrollHeight;
 }
 
-// ── SignalR connection ────────────────────────────────────
+// ── SignalR bağlantısı kur ────────────────────────────────
 
-async function startConnection(username) {
+function buildConnection(url) {
+    const conn = new signalR.HubConnectionBuilder()
+        .withUrl(url)
+        .configureLogging(signalR.LogLevel.Warning)
+        .build();
+
+    conn.on('ReceiveMessage', (msg) => { appendMessage(msg); scrollToBottom(); });
+    conn.on('UpdateUsers', renderUsers);
+    conn.on('UpdateRooms', renderRooms);
+
+    conn.onclose(() => setStatus('disconnected'));
+
+    return conn;
+}
+
+// Sayfa yüklenince: username olmadan gözlemci bağlantısı
+async function startObserver() {
     setStatus('connecting');
+    connection = buildConnection(HUB_URL);
+    try {
+        await connection.start();
+        setStatus('connected');
+    } catch {
+        setStatus('disconnected');
+    }
+}
+
+// Join Room: gözlemci bağlantısını kes, katılımcı olarak yeniden bağlan
+async function startParticipant(username) {
+    setStatus('connecting');
+
+    if (connection) {
+        try { await connection.stop(); } catch { /* ignore */ }
+        connection = null;
+    }
 
     connection = new signalR.HubConnectionBuilder()
         .withUrl(`${HUB_URL}?username=${encodeURIComponent(username)}`)
@@ -132,36 +168,24 @@ async function startConnection(username) {
         .configureLogging(signalR.LogLevel.Warning)
         .build();
 
-    connection.on('ReceiveMessage', (msg) => {
-        appendMessage(msg);
-        scrollToBottom();
-    });
-
+    connection.on('ReceiveMessage', (msg) => { appendMessage(msg); scrollToBottom(); });
     connection.on('UpdateUsers', renderUsers);
     connection.on('UpdateRooms', renderRooms);
 
-    connection.onreconnecting(() => {
-        setStatus('reconnecting');
-        setInputEnabled(false);
-    });
-
+    connection.onreconnecting(() => { setStatus('reconnecting'); setInputEnabled(false); });
     connection.onreconnected(async () => {
         setStatus('connected');
         if (currentRoom) await connection.invoke('JoinRoom', currentRoom);
         setInputEnabled(true);
     });
-
-    connection.onclose(() => {
-        setStatus('disconnected');
-        setInputEnabled(false);
-    });
+    connection.onclose(() => { setStatus('disconnected'); setInputEnabled(false); });
 
     try {
         await connection.start();
         setStatus('connected');
         return true;
     } catch (err) {
-        console.error('SignalR connection failed:', err);
+        console.error('SignalR bağlantısı başarısız:', err);
         setStatus('disconnected');
         return false;
     }
@@ -170,7 +194,6 @@ async function startConnection(username) {
 // ── Room management ───────────────────────────────────────
 
 async function joinRoom(roomName) {
-    // Mevcut odadan çık
     if (currentRoom && currentRoom !== roomName) {
         try { await connection.invoke('LeaveRoom', currentRoom); } catch { /* ignore */ }
     }
@@ -183,7 +206,6 @@ async function joinRoom(roomName) {
     roomTag.textContent = `# ${roomName}`;
     chatOverlay.hidden = true;
 
-    // Geçmişi yükle
     messages.innerHTML = '';
     try {
         const resp = await fetch(`${API_MESSAGES}/${encodeURIComponent(roomName)}`);
@@ -195,11 +217,8 @@ async function joinRoom(roomName) {
             scrollToBottom();
         }
     } catch (err) {
-        console.error('Failed to load history:', err);
+        console.error('Mesaj geçmişi yüklenemedi:', err);
     }
-
-    // Oda listesini aktif oda vurgusuyla yenile
-    renderRooms([...roomsList.querySelectorAll('.room-item')].map(li => li.dataset.room));
 
     setInputEnabled(true);
     messageInput.focus();
@@ -232,14 +251,13 @@ async function sendMessage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sender: currentUser, content, roomName: currentRoom })
         });
-
         if (resp.ok) {
             messageInput.value = '';
         } else {
-            console.error('Send failed:', await resp.text());
+            console.error('Gönderme hatası:', await resp.text());
         }
     } catch (err) {
-        console.error('Network error:', err);
+        console.error('Ağ hatası:', err);
     } finally {
         isSending = false;
         setInputEnabled(true);
@@ -258,15 +276,13 @@ joinBtn.addEventListener('click', async () => {
     joinBtn.disabled = true;
     joinBtn.textContent = 'Connecting…';
 
-    const alreadyConnected = connection && connection.state === signalR.HubConnectionState.Connected;
-    if (!alreadyConnected) {
-        currentUser = username;
-        const ok = await startConnection(username);
-        if (!ok) {
-            joinBtn.disabled = false;
-            joinBtn.textContent = 'Join Room';
-            return;
-        }
+    // Gözlemci bağlantısını kes, katılımcı olarak yeniden bağlan
+    currentUser = username;
+    const ok = await startParticipant(username);
+    if (!ok) {
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'Join Room';
+        return;
     }
 
     await joinRoom(room);
@@ -284,5 +300,5 @@ messageInput.addEventListener('keydown', e => {
 usernameInput.addEventListener('keydown', e => { if (e.key === 'Enter') roomInput.focus(); });
 roomInput.addEventListener('keydown',     e => { if (e.key === 'Enter') joinBtn.click(); });
 
-// ── Init ──────────────────────────────────────────────────
-setStatus('disconnected');
+// ── Sayfa açılışında gözlemci bağlantısını başlat ─────────
+startObserver();
