@@ -1,13 +1,12 @@
-// API_BASE_URL and HUB_URL are injected by the Razor view (Index.cshtml)
+// API_BASE_URL, HUB_URL, CURRENT_USERNAME — Razor view tarafından inject edilir
 const API_MESSAGES = `${API_BASE_URL}/api/messages`;
 
 let connection = null;
-let currentUser = null;
+let currentUser = CURRENT_USERNAME;
 let currentRoom = null;
 let isSending = false;
 
 // ── DOM refs ──────────────────────────────────────────────
-const usernameInput   = document.getElementById('username-input');
 const roomInput       = document.getElementById('room-input');
 const joinBtn         = document.getElementById('join-btn');
 const leaveBtn        = document.getElementById('leave-btn');
@@ -66,21 +65,8 @@ function renderRooms(rooms) {
         li.addEventListener('click', async () => {
             const roomName = li.dataset.room;
             if (roomName === currentRoom) return;
-
-            // Kullanıcı adı girilmemişse odur inputa odaklan
-            if (!usernameInput.value.trim()) {
-                usernameInput.focus();
-                return;
-            }
-
-            // Gözlemci modundaysa tam katılımcı olarak bağlan
-            if (!currentUser) {
-                roomInput.value = roomName;
-                joinBtn.click();
-                return;
-            }
-
-            await joinRoom(roomName);
+            if (connection?.state === signalR.HubConnectionState.Connected)
+                await joinRoom(roomName);
         });
     });
 }
@@ -124,46 +110,13 @@ function scrollToBottom() {
     messages.scrollTop = messages.scrollHeight;
 }
 
-// ── SignalR bağlantısı kur ────────────────────────────────
+// ── SignalR bağlantısı ────────────────────────────────────
 
-function buildConnection(url) {
-    const conn = new signalR.HubConnectionBuilder()
-        .withUrl(url)
-        .configureLogging(signalR.LogLevel.Warning)
-        .build();
-
-    conn.on('ReceiveMessage', (msg) => { appendMessage(msg); scrollToBottom(); });
-    conn.on('UpdateUsers', renderUsers);
-    conn.on('UpdateRooms', renderRooms);
-
-    conn.onclose(() => setStatus('disconnected'));
-
-    return conn;
-}
-
-// Sayfa yüklenince: username olmadan gözlemci bağlantısı
-async function startObserver() {
+async function initConnection() {
     setStatus('connecting');
-    connection = buildConnection(HUB_URL);
-    try {
-        await connection.start();
-        setStatus('connected');
-    } catch {
-        setStatus('disconnected');
-    }
-}
-
-// Join Room: gözlemci bağlantısını kes, katılımcı olarak yeniden bağlan
-async function startParticipant(username) {
-    setStatus('connecting');
-
-    if (connection) {
-        try { await connection.stop(); } catch { /* ignore */ }
-        connection = null;
-    }
 
     connection = new signalR.HubConnectionBuilder()
-        .withUrl(`${HUB_URL}?username=${encodeURIComponent(username)}`)
+        .withUrl(`${HUB_URL}?username=${encodeURIComponent(currentUser)}`)
         .withAutomaticReconnect([0, 2000, 5000, 10000])
         .configureLogging(signalR.LogLevel.Warning)
         .build();
@@ -173,21 +126,21 @@ async function startParticipant(username) {
     connection.on('UpdateRooms', renderRooms);
 
     connection.onreconnecting(() => { setStatus('reconnecting'); setInputEnabled(false); });
+
     connection.onreconnected(async () => {
         setStatus('connected');
         if (currentRoom) await connection.invoke('JoinRoom', currentRoom);
-        setInputEnabled(true);
+        setInputEnabled(!!currentRoom);
     });
+
     connection.onclose(() => { setStatus('disconnected'); setInputEnabled(false); });
 
     try {
         await connection.start();
         setStatus('connected');
-        return true;
     } catch (err) {
-        console.error('SignalR bağlantısı başarısız:', err);
+        console.error('Bağlantı kurulamadı:', err);
         setStatus('disconnected');
-        return false;
     }
 }
 
@@ -240,7 +193,7 @@ async function leaveRoom() {
 
 async function sendMessage() {
     const content = messageInput.value.trim();
-    if (!content || !currentUser || !currentRoom || isSending) return;
+    if (!content || !currentRoom || isSending) return;
 
     isSending = true;
     setInputEnabled(false);
@@ -268,26 +221,14 @@ async function sendMessage() {
 // ── Event listeners ───────────────────────────────────────
 
 joinBtn.addEventListener('click', async () => {
-    const username = usernameInput.value.trim();
     const room = roomInput.value.trim();
-    if (!username) { usernameInput.focus(); return; }
-    if (!room)     { roomInput.focus();     return; }
+    if (!room) { roomInput.focus(); return; }
+
+    if (connection?.state !== signalR.HubConnectionState.Connected) return;
 
     joinBtn.disabled = true;
-    joinBtn.textContent = 'Connecting…';
-
-    // Gözlemci bağlantısını kes, katılımcı olarak yeniden bağlan
-    currentUser = username;
-    const ok = await startParticipant(username);
-    if (!ok) {
-        joinBtn.disabled = false;
-        joinBtn.textContent = 'Join Room';
-        return;
-    }
-
     await joinRoom(room);
     joinBtn.disabled = false;
-    joinBtn.textContent = 'Join Room';
 });
 
 leaveBtn.addEventListener('click', leaveRoom);
@@ -297,8 +238,7 @@ messageInput.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
 
-usernameInput.addEventListener('keydown', e => { if (e.key === 'Enter') roomInput.focus(); });
-roomInput.addEventListener('keydown',     e => { if (e.key === 'Enter') joinBtn.click(); });
+roomInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinBtn.click(); });
 
-// ── Sayfa açılışında gözlemci bağlantısını başlat ─────────
-startObserver();
+// ── Sayfa açılışında bağlan ───────────────────────────────
+initConnection();

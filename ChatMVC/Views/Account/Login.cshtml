@@ -1,0 +1,71 @@
+@model ChatMVC.Models.LoginViewModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - RealTime Chat</title>
+    <link rel="stylesheet" href="~/css/chat.css">
+</head>
+<body class="login-page">
+
+    <div class="login-card">
+
+        <div class="login-brand">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <h1>RealTime Chat</h1>
+        </div>
+
+        <p class="login-subtitle">Sign in to your account</p>
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="auth-error">
+                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                {
+                    <span>@error.ErrorMessage</span>
+                }
+            </div>
+        }
+
+        <form method="post" asp-controller="Account" asp-action="Login" autocomplete="off">
+            <div class="auth-fields">
+                <div class="login-field">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="Username" value="@Model.Username"
+                           placeholder="Your username" maxlength="50" autofocus
+                           class="login-input">
+                </div>
+                <div class="login-field">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="Password"
+                           placeholder="Your password"
+                           class="login-input">
+                </div>
+            </div>
+
+            <button type="submit" class="login-btn">
+                Sign In
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                    <polyline points="12 5 19 12 12 19"/>
+                </svg>
+            </button>
+        </form>
+
+        <p class="auth-switch">
+            Don't have an account?
+            <a asp-controller="Account" asp-action="Register">Create one</a>
+        </p>
+
+    </div>
+
+</body>
+</html>

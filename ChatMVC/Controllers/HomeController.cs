@@ -14,9 +14,14 @@ public class HomeController : Controller
 
     public IActionResult Index()
     {
+        var username = HttpContext.Session.GetString("Username");
+        if (string.IsNullOrWhiteSpace(username))
+            return RedirectToAction("Login", "Account");
+
         var apiBase = _config["ChatAPI:BaseUrl"] ?? "http://localhost:5000";
         return View(new ChatViewModel
         {
+            Username = username,
             ApiBaseUrl = apiBase,
             HubUrl = $"{apiBase}/chatHub"
         });

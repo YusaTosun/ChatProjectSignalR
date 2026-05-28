@@ -13,9 +13,17 @@
             </svg>
             <span>RealTime Chat</span>
         </div>
-        <div id="connection-badge" class="badge badge--disconnected">
-            <span class="badge__dot"></span>
-            <span id="connection-text">Disconnected</span>
+
+        <div class="header-right">
+            <div class="header-user">
+                <div class="user-avatar user-avatar--sm">@Model.Username.Substring(0, 1).ToUpper()</div>
+                <span class="header-username">@Model.Username</span>
+            </div>
+            <div id="connection-badge" class="badge badge--disconnected">
+                <span class="badge__dot"></span>
+                <span id="connection-text">Disconnected</span>
+            </div>
+            <a asp-controller="Account" asp-action="Logout" class="btn btn--ghost btn--sm">Logout</a>
         </div>
     </header>
 
@@ -24,13 +32,9 @@
         <aside id="sidebar">
 
             <div class="panel" id="panel-setup">
-                <p class="panel__title">Connect</p>
+                <p class="panel__title">Join Room</p>
                 <div class="field">
-                    <label for="username-input">Username</label>
-                    <input id="username-input" type="text" placeholder="e.g. Alice" maxlength="50" autocomplete="off">
-                </div>
-                <div class="field">
-                    <label for="room-input">Room</label>
+                    <label for="room-input">Room Name</label>
                     <input id="room-input" type="text" placeholder="e.g. general" maxlength="50" autocomplete="off">
                 </div>
                 <button id="join-btn" class="btn btn--primary">Join Room</button>
@@ -52,7 +56,7 @@
             <div class="panel">
                 <p class="panel__title">Online Users</p>
                 <ul id="users-list">
-                    <li class="users-list__empty">No users online</li>
+                    <li class="list-empty">No users online</li>
                 </ul>
             </div>
 
@@ -65,7 +69,7 @@
                     <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                     </svg>
-                    <p>Enter a username and room<br>to start chatting</p>
+                    <p>Pick a room from the list<br>or enter a name to join</p>
                 </div>
             </div>
 
@@ -90,6 +94,7 @@
     <script>
         const API_BASE_URL = '@Model.ApiBaseUrl';
         const HUB_URL = '@Model.HubUrl';
+        const CURRENT_USERNAME = '@Model.Username';
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@@8/dist/browser/signalr.min.js"></script>
     <script src="~/js/chat.js" asp-append-version="true"></script>
