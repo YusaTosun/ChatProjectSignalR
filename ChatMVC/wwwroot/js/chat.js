@@ -17,6 +17,7 @@ const sendBtn         = document.getElementById('send-btn');
 const connectionBadge = document.getElementById('connection-badge');
 const connectionText  = document.getElementById('connection-text');
 const usersList       = document.getElementById('users-list');
+const roomsList       = document.getElementById('rooms-list');
 const chatOverlay     = document.getElementById('chat-overlay');
 const panelSetup      = document.getElementById('panel-setup');
 const panelRoom       = document.getElementById('panel-room');
@@ -45,11 +46,47 @@ function setInputEnabled(enabled) {
     sendBtn.disabled = !enabled;
 }
 
+// ── Rooms list ────────────────────────────────────────────
+
+function renderRooms(rooms) {
+    if (!rooms || rooms.length === 0) {
+        roomsList.innerHTML = '<li class="list-empty">No active rooms</li>';
+        return;
+    }
+
+    roomsList.innerHTML = rooms.map(name => `
+        <li class="room-item ${name === currentRoom ? 'room-item--active' : ''}"
+            data-room="${escapeHtml(name)}">
+            <span class="room-hash">#</span>
+            <span>${escapeHtml(name)}</span>
+        </li>`
+    ).join('');
+
+    roomsList.querySelectorAll('.room-item').forEach(li => {
+        li.addEventListener('click', async () => {
+            const roomName = li.dataset.room;
+            if (roomName === currentRoom) return;
+
+            if (!currentUser) { usernameInput.focus(); return; }
+
+            const isConnected = connection && connection.state === signalR.HubConnectionState.Connected;
+            if (!isConnected) {
+                // kullanıcı henüz bağlanmamış — oda adını input'a doldur
+                roomInput.value = roomName;
+                roomInput.focus();
+                return;
+            }
+
+            await joinRoom(roomName);
+        });
+    });
+}
+
 // ── Users list ────────────────────────────────────────────
 
 function renderUsers(users) {
     if (!users || users.length === 0) {
-        usersList.innerHTML = '<li class="users-list__empty">No users online</li>';
+        usersList.innerHTML = '<li class="list-empty">No users online</li>';
         return;
     }
     usersList.innerHTML = users.map(name => `
@@ -101,6 +138,7 @@ async function startConnection(username) {
     });
 
     connection.on('UpdateUsers', renderUsers);
+    connection.on('UpdateRooms', renderRooms);
 
     connection.onreconnecting(() => {
         setStatus('reconnecting');
@@ -132,6 +170,11 @@ async function startConnection(username) {
 // ── Room management ───────────────────────────────────────
 
 async function joinRoom(roomName) {
+    // Mevcut odadan çık
+    if (currentRoom && currentRoom !== roomName) {
+        try { await connection.invoke('LeaveRoom', currentRoom); } catch { /* ignore */ }
+    }
+
     await connection.invoke('JoinRoom', roomName);
     currentRoom = roomName;
 
@@ -140,21 +183,23 @@ async function joinRoom(roomName) {
     roomTag.textContent = `# ${roomName}`;
     chatOverlay.hidden = true;
 
+    // Geçmişi yükle
     messages.innerHTML = '';
     try {
         const resp = await fetch(`${API_MESSAGES}/${encodeURIComponent(roomName)}`);
         if (resp.ok) {
             const history = await resp.json();
-            if (history.length > 0) {
-                history.forEach(appendMessage);
-            } else {
-                appendSystem('No messages yet — start the conversation!');
-            }
+            history.length > 0
+                ? history.forEach(appendMessage)
+                : appendSystem('No messages yet — start the conversation!');
             scrollToBottom();
         }
     } catch (err) {
         console.error('Failed to load history:', err);
     }
+
+    // Oda listesini aktif oda vurgusuyla yenile
+    renderRooms([...roomsList.querySelectorAll('.room-item')].map(li => li.dataset.room));
 
     setInputEnabled(true);
     messageInput.focus();

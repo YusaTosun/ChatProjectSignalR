@@ -1,5 +1,6 @@
 using ChatAPI.Data;
 using ChatAPI.Models;
+using ChatAPI.Services;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,11 +9,13 @@ namespace ChatAPI.Hubs;
 public class ChatHub : Hub
 {
     private readonly ApplicationDbContext _db;
+    private readonly RoomTracker _rooms;
     private readonly ILogger<ChatHub> _logger;
 
-    public ChatHub(ApplicationDbContext db, ILogger<ChatHub> logger)
+    public ChatHub(ApplicationDbContext db, RoomTracker rooms, ILogger<ChatHub> logger)
     {
         _db = db;
+        _rooms = rooms;
         _logger = logger;
     }
 
@@ -22,26 +25,19 @@ public class ChatHub : Hub
 
         var existing = await _db.Users.FirstOrDefaultAsync(u => u.Username == username);
         if (existing != null)
-        {
             existing.ConnectionId = Context.ConnectionId;
-        }
         else
-        {
-            _db.Users.Add(new User
-            {
-                Id = Guid.NewGuid(),
-                Username = username,
-                ConnectionId = Context.ConnectionId
-            });
-        }
+            _db.Users.Add(new User { Id = Guid.NewGuid(), Username = username, ConnectionId = Context.ConnectionId });
 
         await _db.SaveChangesAsync();
 
         var activeUsers = await _db.Users.Select(u => u.Username).ToListAsync();
         await Clients.All.SendAsync("UpdateUsers", activeUsers);
 
-        _logger.LogInformation("Connected: {ConnectionId} as {Username}", Context.ConnectionId, username);
+        // Yeni bağlanan kullanıcıya mevcut odaları gönder
+        await Clients.Caller.SendAsync("UpdateRooms", _rooms.GetRooms());
 
+        _logger.LogInformation("Connected: {ConnectionId} as {Username}", Context.ConnectionId, username);
         await base.OnConnectedAsync();
     }
 
@@ -54,23 +50,29 @@ public class ChatHub : Hub
             await _db.SaveChangesAsync();
         }
 
+        _rooms.RemoveConnection(Context.ConnectionId);
+
         var activeUsers = await _db.Users.Select(u => u.Username).ToListAsync();
         await Clients.All.SendAsync("UpdateUsers", activeUsers);
+        await Clients.All.SendAsync("UpdateRooms", _rooms.GetRooms());
 
         _logger.LogInformation("Disconnected: {ConnectionId}", Context.ConnectionId);
-
         await base.OnDisconnectedAsync(exception);
     }
 
     public async Task JoinRoom(string roomName)
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, roomName);
+        _rooms.Add(roomName, Context.ConnectionId);
+        await Clients.All.SendAsync("UpdateRooms", _rooms.GetRooms());
         _logger.LogInformation("{ConnectionId} joined room: {RoomName}", Context.ConnectionId, roomName);
     }
 
     public async Task LeaveRoom(string roomName)
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomName);
+        _rooms.Remove(roomName, Context.ConnectionId);
+        await Clients.All.SendAsync("UpdateRooms", _rooms.GetRooms());
         _logger.LogInformation("{ConnectionId} left room: {RoomName}", Context.ConnectionId, roomName);
     }
 }

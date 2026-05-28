@@ -1,6 +1,9 @@
 /* ── Reset & Variables ─────────────────────────────────── */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* hidden attribute'unun author CSS tarafından override edilmesini engelle */
+[hidden] { display: none !important; }
+
 :root {
     --c-bg:        #0d1117;
     --c-surface:   #161b22;
@@ -207,6 +210,33 @@ input[type="text"]:disabled { opacity: .45; cursor: not-allowed; }
 }
 
 .users-list__empty { color: var(--c-faint); font-style: italic; font-size: 12px; }
+
+/* ── Rooms list ────────────────────────────────────────── */
+#rooms-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+
+.room-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: var(--r-sm);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .1s;
+    user-select: none;
+}
+
+.room-item:hover { background: var(--c-surface2); }
+
+.room-item--active {
+    background: rgba(88,166,255,.12);
+    color: var(--c-accent);
+}
+
+.room-hash { color: var(--c-muted); font-weight: 600; line-height: 1; }
+.room-item--active .room-hash { color: var(--c-accent); }
+
+.list-empty { color: var(--c-faint); font-style: italic; font-size: 12px; }
 
 /* ── Chat Main ─────────────────────────────────────────── */
 #chat {
