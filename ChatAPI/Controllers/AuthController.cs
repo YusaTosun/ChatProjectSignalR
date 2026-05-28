@@ -31,18 +31,27 @@ public class AuthController : ControllerBase
         if (request.Password.Length < 6)
             return BadRequest(new { error = "Password must be at least 6 characters." });
 
-        var exists = await _db.AppUsers.AnyAsync(u => u.Username == request.Username);
+        var normalized = request.Username.Trim();
+
+        var exists = await _db.AppUsers.AnyAsync(u => u.Username.ToLower() == normalized.ToLower());
         if (exists)
             return Conflict(new { error = "This username is already taken." });
 
         var user = new AppUser
         {
-            Username = request.Username.Trim(),
+            Username = normalized,
             PasswordHash = PasswordHelper.Hash(request.Password)
         };
 
         _db.AppUsers.Add(user);
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new { error = "This username is already taken." });
+        }
 
         return Ok(new { username = user.Username });
     }
@@ -54,8 +63,9 @@ public class AuthController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
             return BadRequest(new { error = "Username and password are required." });
 
+        var normalized = request.Username.Trim();
         var user = await _db.AppUsers
-            .FirstOrDefaultAsync(u => u.Username == request.Username);
+            .FirstOrDefaultAsync(u => u.Username.ToLower() == normalized.ToLower());
 
         if (user == null || !PasswordHelper.Verify(request.Password, user.PasswordHash))
             return Unauthorized(new { error = "Invalid username or password." });
