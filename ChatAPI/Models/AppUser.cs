@@ -11,4 +11,6 @@ public class AppUser
     public bool IsOnline { get; set; } = false;
     public string? ConnectionId { get; set; }
     public DateTime? LastSeenAt { get; set; }
+
+    public ICollection<ChatRoom> CreatedRooms { get; set; } = [];
 }

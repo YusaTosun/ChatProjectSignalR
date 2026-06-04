@@ -27,19 +27,19 @@ public class ChatController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> SendMessage([FromBody] SendMessageRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Sender) ||
-            string.IsNullOrWhiteSpace(request.Content) ||
-            string.IsNullOrWhiteSpace(request.RoomName))
-        {
-            return BadRequest(new { error = "Sender, Content, and RoomName are required." });
-        }
+        if (string.IsNullOrWhiteSpace(request.Sender) || string.IsNullOrWhiteSpace(request.Content))
+            return BadRequest(new { error = "Sender and Content are required." });
+
+        var roomExists = await _db.ChatRooms.AnyAsync(r => r.Id == request.RoomId);
+        if (!roomExists)
+            return BadRequest(new { error = "Room not found." });
 
         var message = new ChatMessage
         {
             Sender = request.Sender,
             Content = request.Content,
             Timestamp = DateTime.UtcNow,
-            RoomName = request.RoomName
+            RoomId = request.RoomId
         };
 
         _db.Messages.Add(message);
@@ -51,22 +51,26 @@ public class ChatController : ControllerBase
             sender = message.Sender,
             content = message.Content,
             timestamp = message.Timestamp,
-            roomName = message.RoomName
+            roomId = message.RoomId
         };
 
-        await _hubContext.Clients.Group(request.RoomName).SendAsync("ReceiveMessage", payload);
+        await _hubContext.Clients.Group(request.RoomId.ToString()).SendAsync("ReceiveMessage", payload);
 
-        _logger.LogInformation("Message #{Id} saved and broadcast to room '{Room}'", message.Id, message.RoomName);
+        _logger.LogInformation("Message #{Id} saved and broadcast to room '{RoomId}'", message.Id, message.RoomId);
 
         return Ok(payload);
     }
 
-    // GET /api/messages/{roomName}
-    [HttpGet("{roomName}")]
-    public async Task<IActionResult> GetMessages(string roomName)
+    // GET /api/messages/{roomId}
+    [HttpGet("{roomId:guid}")]
+    public async Task<IActionResult> GetMessages(Guid roomId)
     {
+        var roomExists = await _db.ChatRooms.AnyAsync(r => r.Id == roomId);
+        if (!roomExists)
+            return NotFound(new { error = "Room not found." });
+
         var messages = await _db.Messages
-            .Where(m => m.RoomName == roomName)
+            .Where(m => m.RoomId == roomId)
             .OrderBy(m => m.Timestamp)
             .Select(m => new
             {
@@ -74,7 +78,7 @@ public class ChatController : ControllerBase
                 sender = m.Sender,
                 content = m.Content,
                 timestamp = m.Timestamp,
-                roomName = m.RoomName
+                roomId = m.RoomId
             })
             .ToListAsync();
 

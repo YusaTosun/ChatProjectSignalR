@@ -9,19 +9,11 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<ChatMessage> Messages { get; set; }
     public DbSet<AppUser> AppUsers { get; set; }
+    public DbSet<ChatRoom> ChatRooms { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-
-        modelBuilder.Entity<ChatMessage>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Sender).HasMaxLength(100).IsRequired();
-            entity.Property(e => e.Content).HasMaxLength(2000).IsRequired();
-            entity.Property(e => e.RoomName).HasMaxLength(100).IsRequired();
-            entity.Property(e => e.Timestamp).IsRequired();
-        });
 
         modelBuilder.Entity<AppUser>(entity =>
         {
@@ -32,6 +24,29 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.Property(e => e.ConnectionId).HasMaxLength(200);
             entity.HasIndex(e => e.ConnectionId);
+        });
+
+        modelBuilder.Entity<ChatRoom>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.HasOne(e => e.CreatedBy)
+                  .WithMany(u => u.CreatedRooms)
+                  .HasForeignKey(e => e.CreatedById)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ChatMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Sender).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Content).HasMaxLength(2000).IsRequired();
+            entity.Property(e => e.Timestamp).IsRequired();
+            entity.HasOne(e => e.Room)
+                  .WithMany(r => r.Messages)
+                  .HasForeignKey(e => e.RoomId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

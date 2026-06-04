@@ -1,6 +1,5 @@
 using ChatAPI.Data;
 using ChatAPI.Models;
-using ChatAPI.Services;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,13 +8,11 @@ namespace ChatAPI.Hubs;
 public class ChatHub : Hub
 {
     private readonly ApplicationDbContext _db;
-    private readonly RoomTracker _rooms;
     private readonly ILogger<ChatHub> _logger;
 
-    public ChatHub(ApplicationDbContext db, RoomTracker rooms, ILogger<ChatHub> logger)
+    public ChatHub(ApplicationDbContext db, ILogger<ChatHub> logger)
     {
         _db = db;
-        _rooms = rooms;
         _logger = logger;
     }
 
@@ -44,7 +41,6 @@ public class ChatHub : Hub
         }
         else
         {
-            // Gözlemci: sadece mevcut durumu gönder
             var onlineUsers = await _db.AppUsers
                 .Where(u => u.IsOnline)
                 .Select(u => u.Username)
@@ -53,7 +49,8 @@ public class ChatHub : Hub
             await Clients.Caller.SendAsync("UpdateUsers", onlineUsers);
         }
 
-        await Clients.Caller.SendAsync("UpdateRooms", _rooms.GetRooms());
+        var rooms = await GetRoomListAsync();
+        await Clients.Caller.SendAsync("UpdateRooms", rooms);
 
         _logger.LogInformation("Connected: {ConnectionId} ({Mode})",
             Context.ConnectionId, string.IsNullOrWhiteSpace(username) ? "observer" : username);
@@ -81,26 +78,36 @@ public class ChatHub : Hub
             await Clients.All.SendAsync("UpdateUsers", onlineUsers);
         }
 
-        _rooms.RemoveConnection(Context.ConnectionId);
-        await Clients.All.SendAsync("UpdateRooms", _rooms.GetRooms());
-
         _logger.LogInformation("Disconnected: {ConnectionId}", Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
     }
 
-    public async Task JoinRoom(string roomName)
+    public async Task JoinRoom(Guid roomId)
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, roomName);
-        _rooms.Add(roomName, Context.ConnectionId);
-        await Clients.All.SendAsync("UpdateRooms", _rooms.GetRooms());
-        _logger.LogInformation("{ConnectionId} joined room: {RoomName}", Context.ConnectionId, roomName);
+        var room = await _db.ChatRooms.FindAsync(roomId);
+        if (room == null) return;
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, roomId.ToString());
+        _logger.LogInformation("{ConnectionId} joined room: {RoomId}", Context.ConnectionId, roomId);
     }
 
-    public async Task LeaveRoom(string roomName)
+    public async Task LeaveRoom(Guid roomId)
     {
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomName);
-        _rooms.Remove(roomName, Context.ConnectionId);
-        await Clients.All.SendAsync("UpdateRooms", _rooms.GetRooms());
-        _logger.LogInformation("{ConnectionId} left room: {RoomName}", Context.ConnectionId, roomName);
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId.ToString());
+        _logger.LogInformation("{ConnectionId} left room: {RoomId}", Context.ConnectionId, roomId);
     }
+
+    private async Task<object[]> GetRoomListAsync() =>
+        await _db.ChatRooms
+            .Include(r => r.CreatedBy)
+            .OrderBy(r => r.CreatedAt)
+            .Select(r => new
+            {
+                id = r.Id,
+                name = r.Name,
+                createdBy = r.CreatedBy.Username,
+                createdAt = r.CreatedAt
+            })
+            .Cast<object>()
+            .ToArrayAsync();
 }
