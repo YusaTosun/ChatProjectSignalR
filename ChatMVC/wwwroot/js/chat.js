@@ -7,6 +7,10 @@ let currentRoomName = null;  // Görüntüleme için
 let allRooms = [];           // { id, name, createdBy, createdAt }[]
 let isSending = false;
 
+// ── Typing ────────────────────────────────────────────────
+const typingUsers = new Map(); // username → otomatik temizleme timer'ı
+let typingTimer = null;        // kendi "yazmayı bıraktım" debounce timer'ı
+
 // ── DOM refs ──────────────────────────────────────────────
 const roomInput       = document.getElementById('room-input');
 const joinBtn         = document.getElementById('join-btn');
@@ -22,6 +26,7 @@ const chatOverlay     = document.getElementById('chat-overlay');
 const panelSetup      = document.getElementById('panel-setup');
 const panelRoom       = document.getElementById('panel-room');
 const roomTag         = document.getElementById('room-tag');
+const typingIndicator = document.getElementById('typing-indicator');
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -114,6 +119,40 @@ function scrollToBottom() {
     messages.scrollTop = messages.scrollHeight;
 }
 
+// ── Typing indicator ──────────────────────────────────────
+
+function addTypingUser(username) {
+    if (typingUsers.has(username)) clearTimeout(typingUsers.get(username));
+    // Karşı taraf disconnect olursa 4 saniye sonra otomatik temizle
+    const timer = setTimeout(() => removeTypingUser(username), 4000);
+    typingUsers.set(username, timer);
+    renderTypingIndicator();
+}
+
+function removeTypingUser(username) {
+    if (!typingUsers.has(username)) return;
+    clearTimeout(typingUsers.get(username));
+    typingUsers.delete(username);
+    renderTypingIndicator();
+}
+
+function clearTypingUsers() {
+    typingUsers.forEach(timer => clearTimeout(timer));
+    typingUsers.clear();
+    renderTypingIndicator();
+}
+
+function renderTypingIndicator() {
+    if (typingUsers.size === 0) {
+        typingIndicator.textContent = '';
+        return;
+    }
+    const names = [...typingUsers.keys()].join(', ');
+    typingIndicator.textContent = typingUsers.size === 1
+        ? `${names} yazıyor...`
+        : `${names} yazıyor...`;
+}
+
 // ── SignalR bağlantısı ────────────────────────────────────
 
 async function initConnection() {
@@ -128,6 +167,8 @@ async function initConnection() {
     connection.on('ReceiveMessage', (msg) => { appendMessage(msg); scrollToBottom(); });
     connection.on('UpdateUsers', renderUsers);
     connection.on('UpdateRooms', renderRooms);
+    connection.on('UserTyping', addTypingUser);
+    connection.on('UserStoppedTyping', removeTypingUser);
     connection.on('RoomCreated', (room) => {
         allRooms = [...allRooms.filter(r => r.id !== room.id), room];
         renderRooms(allRooms);
@@ -183,6 +224,7 @@ async function joinRoom(roomId, roomName) {
         try { await connection.invoke('LeaveRoom', currentRoomId); } catch { /* ignore */ }
     }
 
+    clearTypingUsers();
     await connection.invoke('JoinRoom', roomId);
     currentRoomId = roomId;
     currentRoomName = roomName;
@@ -233,6 +275,8 @@ async function sendMessage() {
 
     isSending = true;
     setInputEnabled(false);
+    clearTimeout(typingTimer);
+    if (currentRoomId) connection.invoke('StopTyping', currentRoomId).catch(() => {});
 
     try {
         const resp = await fetch(`${API_BASE_URL}/api/messages`, {
@@ -263,6 +307,17 @@ joinBtn.addEventListener('click', async () => {
 
 leaveBtn.addEventListener('click', leaveRoom);
 sendBtn.addEventListener('click', sendMessage);
+
+messageInput.addEventListener('input', () => {
+    if (!currentRoomId) return;
+
+    connection.invoke('StartTyping', currentRoomId).catch(() => {});
+
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => {
+        connection.invoke('StopTyping', currentRoomId).catch(() => {});
+    }, 2000);
+});
 
 messageInput.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }

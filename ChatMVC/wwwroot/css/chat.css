@@ -328,6 +328,16 @@ input[type="text"]:disabled { opacity: .45; cursor: not-allowed; }
     padding: 4px 0;
 }
 
+/* ── Typing Indicator ──────────────────────────────────── */
+#typing-indicator {
+    min-height: 18px;
+    padding: 0 16px 4px;
+    font-size: 11px;
+    color: var(--c-muted);
+    font-style: italic;
+    flex-shrink: 0;
+}
+
 /* ── Input Bar ─────────────────────────────────────────── */
 #input-bar {
     display: flex;

@@ -95,6 +95,26 @@ public class ChatHub : Hub
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId.ToString());
         _logger.LogInformation("{ConnectionId} left room: {RoomId}", Context.ConnectionId, roomId);
+
+        var username = Context.GetHttpContext()?.Request.Query["username"].ToString();
+        if (!string.IsNullOrWhiteSpace(username))
+            await Clients.OthersInGroup(roomId.ToString()).SendAsync("UserStoppedTyping", username);
+    }
+
+    public async Task StartTyping(Guid roomId)
+    {
+        var username = Context.GetHttpContext()?.Request.Query["username"].ToString();
+        if (string.IsNullOrWhiteSpace(username)) return;
+
+        await Clients.OthersInGroup(roomId.ToString()).SendAsync("UserTyping", username);
+    }
+
+    public async Task StopTyping(Guid roomId)
+    {
+        var username = Context.GetHttpContext()?.Request.Query["username"].ToString();
+        if (string.IsNullOrWhiteSpace(username)) return;
+
+        await Clients.OthersInGroup(roomId.ToString()).SendAsync("UserStoppedTyping", username);
     }
 
     private async Task<object[]> GetRoomListAsync() =>
