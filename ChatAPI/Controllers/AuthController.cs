@@ -28,9 +28,6 @@ public class AuthController : ControllerBase
         if (request.Username.Length < 3 || request.Username.Length > 50)
             return BadRequest(new { error = "Username must be between 3 and 50 characters." });
 
-        if (request.Password.Length < 6)
-            return BadRequest(new { error = "Password must be at least 6 characters." });
-
         var normalized = request.Username.Trim();
 
         var exists = await _db.AppUsers.AnyAsync(u => u.Username.ToLower() == normalized.ToLower());
