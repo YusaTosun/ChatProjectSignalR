@@ -47,7 +47,9 @@ public class AccountController : Controller
             return View(model);
         }
 
-        HttpContext.Session.SetString("Username", model.Username.Trim());
+        var result = await response.Content.ReadFromJsonAsync<LoginResult>();
+        HttpContext.Session.SetString("UserId", result!.Id.ToString());
+        HttpContext.Session.SetString("Username", result.Username.Trim());
         return RedirectToAction("Index", "Home");
     }
 
@@ -94,7 +96,9 @@ public class AccountController : Controller
         }
 
         // Kayıt başarılı → otomatik giriş yap
-        HttpContext.Session.SetString("Username", model.Username.Trim());
+        var result = await response.Content.ReadFromJsonAsync<LoginResult>();
+        HttpContext.Session.SetString("UserId", result!.Id.ToString());
+        HttpContext.Session.SetString("Username", result.Username.Trim());
         return RedirectToAction("Index", "Home");
     }
 
@@ -109,4 +113,5 @@ public class AccountController : Controller
     // ── Helpers ───────────────────────────────────────────
 
     private record ApiError(string Error);
+    private record LoginResult(Guid Id, string Username);
 }

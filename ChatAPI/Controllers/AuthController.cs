@@ -50,7 +50,7 @@ public class AuthController : ControllerBase
             return Conflict(new { error = "This username is already taken." });
         }
 
-        return Ok(new { username = user.Username });
+        return Ok(new { id = user.Id, username = user.Username });
     }
 
     // POST /api/auth/login
@@ -67,6 +67,6 @@ public class AuthController : ControllerBase
         if (user == null || !PasswordHelper.Verify(request.Password, user.PasswordHash))
             return Unauthorized(new { error = "Invalid username or password." });
 
-        return Ok(new { username = user.Username });
+        return Ok(new { id = user.Id, username = user.Username });
     }
 }

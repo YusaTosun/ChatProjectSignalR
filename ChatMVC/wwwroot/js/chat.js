@@ -1,9 +1,10 @@
-// API_BASE_URL, HUB_URL, CURRENT_USERNAME — Razor view tarafından inject edilir
-const API_MESSAGES = `${API_BASE_URL}/api/messages`;
+// API_BASE_URL, HUB_URL, CURRENT_USER_ID, CURRENT_USERNAME — Razor view tarafından inject edilir
 
 let connection = null;
 let currentUser = CURRENT_USERNAME;
-let currentRoom = null;
+let currentRoomId = null;    // Guid string
+let currentRoomName = null;  // Görüntüleme için
+let allRooms = [];           // { id, name, createdBy, createdAt }[]
 let isSending = false;
 
 // ── DOM refs ──────────────────────────────────────────────
@@ -47,26 +48,29 @@ function setInputEnabled(enabled) {
 
 // ── Rooms list ────────────────────────────────────────────
 
-function renderRooms(rooms) {
-    if (!rooms || rooms.length === 0) {
-        roomsList.innerHTML = '<li class="list-empty">No active rooms</li>';
+function renderRooms(roomList) {
+    allRooms = roomList || [];
+
+    if (allRooms.length === 0) {
+        roomsList.innerHTML = '<li class="list-empty">No rooms yet</li>';
         return;
     }
 
-    roomsList.innerHTML = rooms.map(name => `
-        <li class="room-item ${name === currentRoom ? 'room-item--active' : ''}"
-            data-room="${escapeHtml(name)}">
+    roomsList.innerHTML = allRooms.map(r => `
+        <li class="room-item ${r.id === currentRoomId ? 'room-item--active' : ''}"
+            data-id="${escapeHtml(r.id)}">
             <span class="room-hash">#</span>
-            <span>${escapeHtml(name)}</span>
+            <span>${escapeHtml(r.name)}</span>
         </li>`
     ).join('');
 
     roomsList.querySelectorAll('.room-item').forEach(li => {
         li.addEventListener('click', async () => {
-            const roomName = li.dataset.room;
-            if (roomName === currentRoom) return;
+            const id = li.dataset.id;
+            const room = allRooms.find(r => r.id === id);
+            if (!room || id === currentRoomId) return;
             if (connection?.state === signalR.HubConnectionState.Connected)
-                await joinRoom(roomName);
+                await joinRoom(room.id, room.name);
         });
     });
 }
@@ -124,13 +128,17 @@ async function initConnection() {
     connection.on('ReceiveMessage', (msg) => { appendMessage(msg); scrollToBottom(); });
     connection.on('UpdateUsers', renderUsers);
     connection.on('UpdateRooms', renderRooms);
+    connection.on('RoomCreated', (room) => {
+        allRooms = [...allRooms.filter(r => r.id !== room.id), room];
+        renderRooms(allRooms);
+    });
 
     connection.onreconnecting(() => { setStatus('reconnecting'); setInputEnabled(false); });
 
     connection.onreconnected(async () => {
         setStatus('connected');
-        if (currentRoom) await connection.invoke('JoinRoom', currentRoom);
-        setInputEnabled(!!currentRoom);
+        if (currentRoomId) await connection.invoke('JoinRoom', currentRoomId);
+        setInputEnabled(!!currentRoomId);
     });
 
     connection.onclose(() => { setStatus('disconnected'); setInputEnabled(false); });
@@ -146,13 +154,38 @@ async function initConnection() {
 
 // ── Room management ───────────────────────────────────────
 
-async function joinRoom(roomName) {
-    if (currentRoom && currentRoom !== roomName) {
-        try { await connection.invoke('LeaveRoom', currentRoom); } catch { /* ignore */ }
+async function createRoom() {
+    const name = roomInput.value.trim();
+    if (!name) { roomInput.focus(); return; }
+
+    joinBtn.disabled = true;
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/rooms`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, createdById: CURRENT_USER_ID })
+        });
+        if (resp.ok) {
+            roomInput.value = '';
+            // RoomCreated eventi tüm clientlara gönderilir, liste otomatik güncellenir
+        } else {
+            console.error('Oda oluşturulamadı:', await resp.text());
+        }
+    } catch (err) {
+        console.error('Ağ hatası:', err);
+    } finally {
+        joinBtn.disabled = false;
+    }
+}
+
+async function joinRoom(roomId, roomName) {
+    if (currentRoomId && currentRoomId !== roomId) {
+        try { await connection.invoke('LeaveRoom', currentRoomId); } catch { /* ignore */ }
     }
 
-    await connection.invoke('JoinRoom', roomName);
-    currentRoom = roomName;
+    await connection.invoke('JoinRoom', roomId);
+    currentRoomId = roomId;
+    currentRoomName = roomName;
 
     panelSetup.hidden = true;
     panelRoom.hidden = false;
@@ -161,7 +194,7 @@ async function joinRoom(roomName) {
 
     messages.innerHTML = '';
     try {
-        const resp = await fetch(`${API_MESSAGES}/${encodeURIComponent(roomName)}`);
+        const resp = await fetch(`${API_BASE_URL}/api/messages/${roomId}`);
         if (resp.ok) {
             const history = await resp.json();
             history.length > 0
@@ -173,36 +206,39 @@ async function joinRoom(roomName) {
         console.error('Mesaj geçmişi yüklenemedi:', err);
     }
 
+    renderRooms(allRooms); // aktif odayı vurgulamak için yeniden render et
     setInputEnabled(true);
     messageInput.focus();
 }
 
 async function leaveRoom() {
-    if (!currentRoom) return;
-    try { await connection.invoke('LeaveRoom', currentRoom); } catch { /* ignore */ }
+    if (!currentRoomId) return;
+    try { await connection.invoke('LeaveRoom', currentRoomId); } catch { /* ignore */ }
 
-    currentRoom = null;
+    currentRoomId = null;
+    currentRoomName = null;
     messages.innerHTML = '';
     setInputEnabled(false);
     chatOverlay.hidden = false;
     panelRoom.hidden = true;
     panelSetup.hidden = false;
+    renderRooms(allRooms);
 }
 
 // ── Send message ──────────────────────────────────────────
 
 async function sendMessage() {
     const content = messageInput.value.trim();
-    if (!content || !currentRoom || isSending) return;
+    if (!content || !currentRoomId || isSending) return;
 
     isSending = true;
     setInputEnabled(false);
 
     try {
-        const resp = await fetch(API_MESSAGES, {
+        const resp = await fetch(`${API_BASE_URL}/api/messages`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sender: currentUser, content, roomName: currentRoom })
+            body: JSON.stringify({ sender: currentUser, content, roomId: currentRoomId })
         });
         if (resp.ok) {
             messageInput.value = '';
@@ -221,14 +257,8 @@ async function sendMessage() {
 // ── Event listeners ───────────────────────────────────────
 
 joinBtn.addEventListener('click', async () => {
-    const room = roomInput.value.trim();
-    if (!room) { roomInput.focus(); return; }
-
     if (connection?.state !== signalR.HubConnectionState.Connected) return;
-
-    joinBtn.disabled = true;
-    await joinRoom(room);
-    joinBtn.disabled = false;
+    await createRoom();
 });
 
 leaveBtn.addEventListener('click', leaveRoom);
