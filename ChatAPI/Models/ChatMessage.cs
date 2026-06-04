@@ -8,4 +8,6 @@ public class ChatMessage
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     public Guid RoomId { get; set; }
     public ChatRoom Room { get; set; } = null!;
+    public string? MediaUrl { get; set; }
+    public string? MediaType { get; set; }  // "image" | "video"
 }

@@ -27,8 +27,11 @@ public class ChatController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> SendMessage([FromBody] SendMessageRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Sender) || string.IsNullOrWhiteSpace(request.Content))
-            return BadRequest(new { error = "Sender and Content are required." });
+        if (string.IsNullOrWhiteSpace(request.Sender))
+            return BadRequest(new { error = "Sender is required." });
+
+        if (string.IsNullOrWhiteSpace(request.Content) && string.IsNullOrWhiteSpace(request.MediaUrl))
+            return BadRequest(new { error = "Content or media is required." });
 
         var roomExists = await _db.ChatRooms.AnyAsync(r => r.Id == request.RoomId);
         if (!roomExists)
@@ -39,7 +42,9 @@ public class ChatController : ControllerBase
             Sender = request.Sender,
             Content = request.Content,
             Timestamp = DateTime.UtcNow,
-            RoomId = request.RoomId
+            RoomId = request.RoomId,
+            MediaUrl = request.MediaUrl,
+            MediaType = request.MediaType
         };
 
         _db.Messages.Add(message);
@@ -51,7 +56,9 @@ public class ChatController : ControllerBase
             sender = message.Sender,
             content = message.Content,
             timestamp = message.Timestamp,
-            roomId = message.RoomId
+            roomId = message.RoomId,
+            mediaUrl = message.MediaUrl,
+            mediaType = message.MediaType
         };
 
         await _hubContext.Clients.Group(request.RoomId.ToString()).SendAsync("ReceiveMessage", payload);
@@ -78,7 +85,9 @@ public class ChatController : ControllerBase
                 sender = m.Sender,
                 content = m.Content,
                 timestamp = m.Timestamp,
-                roomId = m.RoomId
+                roomId = m.RoomId,
+                mediaUrl = m.MediaUrl,
+                mediaType = m.MediaType
             })
             .ToListAsync();
 

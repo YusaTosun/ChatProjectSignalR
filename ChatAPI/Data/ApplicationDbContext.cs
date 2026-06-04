@@ -47,6 +47,8 @@ public class ApplicationDbContext : DbContext
                   .WithMany(r => r.Messages)
                   .HasForeignKey(e => e.RoomId)
                   .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(e => e.MediaUrl).HasMaxLength(500);
+            entity.Property(e => e.MediaType).HasMaxLength(10);
         });
     }
 }

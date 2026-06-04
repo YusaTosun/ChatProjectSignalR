@@ -7,6 +7,27 @@ let currentRoomName = null;  // Görüntüleme için
 let allRooms = [];           // { id, name, createdBy, createdAt }[]
 let isSending = false;
 
+// ── Pending media ─────────────────────────────────────────
+let pendingMediaUrl  = null;
+let pendingMediaType = null;
+
+function setPendingMedia(url, type) {
+    pendingMediaUrl  = url;
+    pendingMediaType = type;
+    mediaPreviewInner.innerHTML = type === 'image'
+        ? `<img src="${url}" alt="preview">`
+        : `<video src="${url}"></video>`;
+    mediaPreview.hidden = false;
+}
+
+function clearPendingMedia() {
+    pendingMediaUrl  = null;
+    pendingMediaType = null;
+    mediaPreviewInner.innerHTML = '';
+    mediaPreview.hidden = true;
+    mediaInput.value = '';
+}
+
 // ── Typing ────────────────────────────────────────────────
 const typingUsers = new Map(); // username → otomatik temizleme timer'ı
 let typingTimer = null;        // kendi "yazmayı bıraktım" debounce timer'ı
@@ -26,7 +47,11 @@ const chatOverlay     = document.getElementById('chat-overlay');
 const panelSetup      = document.getElementById('panel-setup');
 const panelRoom       = document.getElementById('panel-room');
 const roomTag         = document.getElementById('room-tag');
-const typingIndicator = document.getElementById('typing-indicator');
+const typingIndicator  = document.getElementById('typing-indicator');
+const mediaPreview     = document.getElementById('media-preview');
+const mediaPreviewInner = document.getElementById('media-preview-inner');
+const mediaRemoveBtn   = document.getElementById('media-remove-btn');
+const mediaInput       = document.getElementById('media-input');
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -101,9 +126,22 @@ function appendMessage(msg) {
     const isOwn = msg.sender === currentUser;
     const el = document.createElement('div');
     el.className = `msg msg--${isOwn ? 'own' : 'other'}`;
+
+    let mediaHtml = '';
+    if (msg.mediaUrl) {
+        if (msg.mediaType === 'image') {
+            mediaHtml = `<img class="msg__media-img" src="${escapeHtml(msg.mediaUrl)}" alt="image" loading="lazy" onclick="window.open(this.src)">`;
+        } else if (msg.mediaType === 'video') {
+            mediaHtml = `<video class="msg__media-video" src="${escapeHtml(msg.mediaUrl)}" controls></video>`;
+        }
+    }
+
     el.innerHTML = `
         ${!isOwn ? `<div class="msg__sender">${escapeHtml(msg.sender)}</div>` : ''}
-        <div class="msg__bubble">${escapeHtml(msg.content)}</div>
+        <div class="msg__bubble">
+            ${mediaHtml}
+            ${msg.content ? `<span>${escapeHtml(msg.content)}</span>` : ''}
+        </div>
         <div class="msg__time">${formatTime(msg.timestamp)}</div>`;
     messages.appendChild(el);
 }
@@ -271,7 +309,8 @@ async function leaveRoom() {
 
 async function sendMessage() {
     const content = messageInput.value.trim();
-    if (!content || !currentRoomId || isSending) return;
+    if (!content && !pendingMediaUrl) return;
+    if (!currentRoomId || isSending) return;
 
     isSending = true;
     setInputEnabled(false);
@@ -282,10 +321,17 @@ async function sendMessage() {
         const resp = await fetch(`${API_BASE_URL}/api/messages`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sender: currentUser, content, roomId: currentRoomId })
+            body: JSON.stringify({
+                sender: currentUser,
+                content,
+                roomId: currentRoomId,
+                mediaUrl: pendingMediaUrl,
+                mediaType: pendingMediaType
+            })
         });
         if (resp.ok) {
             messageInput.value = '';
+            clearPendingMedia();
         } else {
             console.error('Gönderme hatası:', await resp.text());
         }
@@ -324,6 +370,33 @@ messageInput.addEventListener('keydown', e => {
 });
 
 roomInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinBtn.click(); });
+
+mediaInput.addEventListener('change', async () => {
+    const file = mediaInput.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/uploads`, {
+            method: 'POST',
+            body: formData
+        });
+        if (resp.ok) {
+            const { url, mediaType } = await resp.json();
+            setPendingMedia(url, mediaType);
+        } else {
+            const err = await resp.json();
+            console.error('Yükleme hatası:', err.error);
+            alert(err.error);
+        }
+    } catch {
+        console.error('Dosya yüklenemedi.');
+    }
+});
+
+mediaRemoveBtn.addEventListener('click', clearPendingMedia);
 
 // ── Sayfa açılışında bağlan ───────────────────────────────
 initConnection();

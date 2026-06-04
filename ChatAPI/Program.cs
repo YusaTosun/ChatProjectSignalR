@@ -52,6 +52,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors("MvcClient");
+app.UseStaticFiles();
 
 app.MapControllers();
 app.MapHub<ChatHub>("/chatHub");

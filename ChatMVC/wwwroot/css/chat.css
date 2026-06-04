@@ -328,6 +328,65 @@ input[type="text"]:disabled { opacity: .45; cursor: not-allowed; }
     padding: 4px 0;
 }
 
+/* ── Media in messages ─────────────────────────────────── */
+.msg__media-img {
+    max-width: 280px;
+    max-height: 280px;
+    border-radius: 8px;
+    display: block;
+    cursor: pointer;
+    margin-bottom: 4px;
+}
+
+.msg__media-video {
+    max-width: 280px;
+    border-radius: 8px;
+    display: block;
+    margin-bottom: 4px;
+}
+
+/* ── Media preview (pending attachment) ─────────────────── */
+#media-preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: var(--c-surface);
+    border-top: 1px solid var(--c-border);
+    flex-shrink: 0;
+}
+
+#media-preview img,
+#media-preview video {
+    height: 48px;
+    border-radius: 6px;
+    object-fit: cover;
+}
+
+#media-remove-btn {
+    background: none;
+    border: none;
+    color: var(--c-muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 2px 6px;
+}
+
+#media-remove-btn:hover { color: var(--c-text); }
+
+#media-btn {
+    cursor: pointer;
+    color: var(--c-muted);
+    display: flex;
+    align-items: center;
+    padding: 4px;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+
+#media-btn:hover { color: var(--c-text); }
+
 /* ── Typing Indicator ──────────────────────────────────── */
 #typing-indicator {
     min-height: 18px;
