@@ -20,6 +20,9 @@ public class ChatHub : Hub
     {
         var username = Context.GetHttpContext()?.Request.Query["username"].ToString();
 
+        // Rooms sorgusu user güncellemesine bağlı değil, paralel başlat
+        var roomsTask = GetRoomListAsync();
+
         if (!string.IsNullOrWhiteSpace(username))
         {
             var appUser = await _db.AppUsers
@@ -37,20 +40,25 @@ public class ChatHub : Hub
                 .Select(u => u.Username)
                 .ToListAsync();
 
-            await Clients.All.SendAsync("UpdateUsers", onlineUsers);
+            var rooms = await roomsTask;
+            await Task.WhenAll(
+                Clients.All.SendAsync("UpdateUsers", onlineUsers),
+                Clients.Caller.SendAsync("UpdateRooms", rooms)
+            );
         }
         else
         {
-            var onlineUsers = await _db.AppUsers
+            var onlineUsersTask = _db.AppUsers
                 .Where(u => u.IsOnline)
                 .Select(u => u.Username)
                 .ToListAsync();
 
-            await Clients.Caller.SendAsync("UpdateUsers", onlineUsers);
+            var (onlineUsers, rooms) = (await onlineUsersTask, await roomsTask);
+            await Task.WhenAll(
+                Clients.Caller.SendAsync("UpdateUsers", onlineUsers),
+                Clients.Caller.SendAsync("UpdateRooms", rooms)
+            );
         }
-
-        var rooms = await GetRoomListAsync();
-        await Clients.Caller.SendAsync("UpdateRooms", rooms);
 
         _logger.LogInformation("Connected: {ConnectionId} ({Mode})",
             Context.ConnectionId, string.IsNullOrWhiteSpace(username) ? "observer" : username);
