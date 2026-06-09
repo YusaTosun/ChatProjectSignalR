@@ -5,6 +5,7 @@ let currentUser = CURRENT_USERNAME;
 let currentRoomId = null;    // Guid string
 let currentRoomName = null;  // Görüntüleme için
 let allRooms = [];           // { id, name, createdBy, createdAt }[]
+let onlineUsers = [];        // string[]
 let isSending = false;
 
 // ── Pending media ─────────────────────────────────────────
@@ -203,7 +204,13 @@ async function initConnection() {
         .build();
 
     connection.on('ReceiveMessage', (msg) => { appendMessage(msg); scrollToBottom(); });
-    connection.on('UpdateUsers', renderUsers);
+    connection.on('UpdateUsers', (users) => { onlineUsers = users; renderUsers(users); });
+    connection.on('UserConnected', (username) => {
+        if (!onlineUsers.includes(username)) { onlineUsers = [...onlineUsers, username]; renderUsers(onlineUsers); }
+    });
+    connection.on('UserDisconnected', (username) => {
+        onlineUsers = onlineUsers.filter(u => u !== username); renderUsers(onlineUsers);
+    });
     connection.on('UpdateRooms', renderRooms);
     connection.on('UserTyping', addTypingUser);
     connection.on('UserStoppedTyping', removeTypingUser);

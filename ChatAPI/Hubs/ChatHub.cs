@@ -20,9 +20,6 @@ public class ChatHub : Hub
     {
         var username = Context.GetHttpContext()?.Request.Query["username"].ToString();
 
-        // Rooms sorgusu user güncellemesine bağlı değil, paralel başlat
-        var roomsTask = GetRoomListAsync();
-
         if (!string.IsNullOrWhiteSpace(username))
         {
             var appUser = await _db.AppUsers
@@ -40,20 +37,24 @@ public class ChatHub : Hub
                 .Select(u => u.Username)
                 .ToListAsync();
 
-            var rooms = await roomsTask;
+            var rooms = await GetRoomListAsync();
+
+            // Sadece yeni bağlanan kullanıcıya tam liste gönder;
+            // diğerlerine yalnızca yeni kullanıcının adını bildir (N×N broadcast önlenir)
             await Task.WhenAll(
-                Clients.All.SendAsync("UpdateUsers", onlineUsers),
-                Clients.Caller.SendAsync("UpdateRooms", rooms)
+                Clients.Caller.SendAsync("UpdateUsers", onlineUsers),
+                Clients.Caller.SendAsync("UpdateRooms", rooms),
+                Clients.Others.SendAsync("UserConnected", username)
             );
         }
         else
         {
-            var onlineUsersTask = _db.AppUsers
+            var onlineUsers = await _db.AppUsers
                 .Where(u => u.IsOnline)
                 .Select(u => u.Username)
                 .ToListAsync();
 
-            var (onlineUsers, rooms) = (await onlineUsersTask, await roomsTask);
+            var rooms = await GetRoomListAsync();
             await Task.WhenAll(
                 Clients.Caller.SendAsync("UpdateUsers", onlineUsers),
                 Clients.Caller.SendAsync("UpdateRooms", rooms)
@@ -73,17 +74,13 @@ public class ChatHub : Hub
 
         if (appUser != null)
         {
+            var username = appUser.Username;
             appUser.IsOnline = false;
             appUser.ConnectionId = null;
             appUser.LastSeenAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
-            var onlineUsers = await _db.AppUsers
-                .Where(u => u.IsOnline)
-                .Select(u => u.Username)
-                .ToListAsync();
-
-            await Clients.All.SendAsync("UpdateUsers", onlineUsers);
+            await Clients.All.SendAsync("UserDisconnected", username);
         }
 
         _logger.LogInformation("Disconnected: {ConnectionId}", Context.ConnectionId);

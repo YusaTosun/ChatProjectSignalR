@@ -61,7 +61,7 @@ public class ChatController : ControllerBase
             mediaType = message.MediaType
         };
 
-        await _hubContext.Clients.Group(request.RoomId.ToString()).SendAsync("ReceiveMessage", payload);
+        _ = _hubContext.Clients.Group(request.RoomId.ToString()).SendAsync("ReceiveMessage", payload);
 
         _logger.LogInformation("Message #{Id} saved and broadcast to room '{RoomId}'", message.Id, message.RoomId);
 
