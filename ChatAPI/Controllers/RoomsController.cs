@@ -5,6 +5,7 @@ using ChatAPI.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ChatAPI.Controllers;
 
@@ -14,28 +15,35 @@ public class RoomsController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
     private readonly IHubContext<ChatHub> _hubContext;
+    private readonly IMemoryCache _cache;
+    private const string RoomsCacheKey = "rooms_list";
 
-    public RoomsController(ApplicationDbContext db, IHubContext<ChatHub> hubContext)
+    public RoomsController(ApplicationDbContext db, IHubContext<ChatHub> hubContext, IMemoryCache cache)
     {
         _db = db;
         _hubContext = hubContext;
+        _cache = cache;
     }
 
     // GET /api/rooms
     [HttpGet]
     public async Task<IActionResult> GetRooms()
     {
-        var rooms = await _db.ChatRooms
-            .Include(r => r.CreatedBy)
-            .OrderBy(r => r.CreatedAt)
-            .Select(r => new
-            {
-                id = r.Id,
-                name = r.Name,
-                createdBy = r.CreatedBy.Username,
-                createdAt = r.CreatedAt
-            })
-            .ToListAsync();
+        var rooms = await _cache.GetOrCreateAsync(RoomsCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(10);
+            return await _db.ChatRooms
+                .Include(r => r.CreatedBy)
+                .OrderBy(r => r.CreatedAt)
+                .Select(r => new
+                {
+                    id = r.Id,
+                    name = r.Name,
+                    createdBy = r.CreatedBy.Username,
+                    createdAt = r.CreatedAt
+                })
+                .ToListAsync();
+        });
 
         return Ok(rooms);
     }
@@ -68,7 +76,8 @@ public class RoomsController : ControllerBase
             createdAt = room.CreatedAt
         };
 
-        await _hubContext.Clients.All.SendAsync("RoomCreated", payload);
+        _cache.Remove(RoomsCacheKey);
+        _ = _hubContext.Clients.All.SendAsync("RoomCreated", payload);
 
         return Ok(payload);
     }

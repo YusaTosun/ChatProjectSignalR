@@ -23,7 +23,7 @@ public class ChatHub : Hub
         if (!string.IsNullOrWhiteSpace(username))
         {
             var appUser = await _db.AppUsers
-                .FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower());
+                .FirstOrDefaultAsync(u => u.Username == username);
 
             if (appUser != null)
             {

@@ -30,7 +30,7 @@ public class AuthController : ControllerBase
 
         var normalized = request.Username.Trim();
 
-        var exists = await _db.AppUsers.AnyAsync(u => u.Username.ToLower() == normalized.ToLower());
+        var exists = await _db.AppUsers.AnyAsync(u => u.Username == normalized);
         if (exists)
             return Conflict(new { error = "This username is already taken." });
 
@@ -62,7 +62,7 @@ public class AuthController : ControllerBase
 
         var normalized = request.Username.Trim();
         var user = await _db.AppUsers
-            .FirstOrDefaultAsync(u => u.Username.ToLower() == normalized.ToLower());
+            .FirstOrDefaultAsync(u => u.Username == normalized);
 
         if (user == null || !PasswordHelper.Verify(request.Password, user.PasswordHash))
             return Unauthorized(new { error = "Invalid username or password." });

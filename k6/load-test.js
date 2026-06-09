@@ -21,6 +21,8 @@ import http from "k6/http";
 import ws from "k6/ws";
 import { check, sleep } from "k6";
 import { Counter, Rate, Trend } from "k6/metrics";
+import { htmlReport } from "https://raw.githubusercontent.com/benc-uk/k6-reporter/main/dist/bundle.js";
+import { textSummary } from "https://jslib.k6.io/k6-summary/0.0.2/index.js";
 
 // ─── Yapılandırma ─────────────────────────────────────────────────────────────
 const BASE_URL = __ENV.BASE_URL || "http://localhost:5000";
@@ -42,9 +44,12 @@ const wsSessionDuration = new Trend("ws_session_duration_ms", true);
 // ─── Yük profili ──────────────────────────────────────────────────────────────
 export const options = {
   stages: [
-    { duration: "30s", target: 50  }, // Yavaşça 50 VU'ya çık
-    { duration: "60s", target: 50  }, // 1 dakika sabit tut
-    { duration: "15s", target: 0   }, // Kapat
+    { duration: "30s", target: 100  }, // 0 → 100 VU
+    { duration: "30s", target: 300  }, // 100 → 300 VU
+    { duration: "30s", target: 600  }, // 300 → 600 VU
+    { duration: "30s", target: 1000 }, // 600 → 1000 VU
+    { duration: "60s", target: 1000 }, // 1000 VU sabit tut
+    { duration: "20s", target: 0    }, // Kapat
   ],
   thresholds: {
     // HTTP yanıt süresi p95 < 500ms olmalı
@@ -89,7 +94,7 @@ export default function () {
 
   const loginOk = check(loginRes, {
     "login 200":          (r) => r.status === 200,
-    "login has username": (r) => r.json("username") === user.username,
+    "login has username": (r) => r.status === 200 && r.json("username") === user.username,
   });
 
   loginFailRate.add(!loginOk);
@@ -189,4 +194,16 @@ export default function () {
   }
 
   sleep(1);
+}
+
+// ─── Rapor üretimi ────────────────────────────────────────────────────────────
+export function handleSummary(data) {
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}_${String(now.getHours()).padStart(2,"0")}-${String(now.getMinutes()).padStart(2,"0")}`;
+
+  return {
+    [`k6/reports/report_${timestamp}.html`]: htmlReport(data, { title: `ChatAPI Yük Testi — ${timestamp}` }),
+    [`k6/reports/report_${timestamp}.json`]: JSON.stringify(data, null, 2),
+    stdout: textSummary(data, { indent: "  ", enableColors: true }),
+  };
 }
