@@ -1,0 +1,208 @@
+name: k6 Load Test
+
+# ─── Ne zaman çalışır ─────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [main, master]          # Her main push'ta
+  pull_request:
+    branches: [main, master]          # PR açıldığında / güncellendiğinde
+  workflow_dispatch:                  # Manuel tetikleme (Actions sekmesinden)
+    inputs:
+      vus:
+        description: "Sanal kullanıcı sayısı"
+        required: false
+        default: "100"
+      duration:
+        description: "Test süresi (örn: 60s)"
+        required: false
+        default: "60s"
+
+# ─── İzinler ──────────────────────────────────────────────────────────────────
+permissions:
+  contents: write        # HTML raporu commit'lemek için
+  checks: write          # PR'a check sonucu yazmak için
+  pull-requests: write   # PR'a yorum bırakmak için
+
+jobs:
+  load-test:
+    name: k6 Load Test
+    runs-on: ubuntu-latest
+
+    # ─── SQL Server servis container'ı ────────────────────────────────────────
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          SA_PASSWORD: "LoadTest@2024!"
+          ACCEPT_EULA: "Y"
+          MSSQL_PID: "Developer"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'LoadTest@2024!' -Q 'SELECT 1' -C"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      # 1. Kodu çek
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. .NET kur
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+
+      # 3. Bağımlılıkları yükle
+      - name: Restore dependencies
+        run: dotnet restore ChatAPI/ChatAPI.csproj
+
+      # 4. Derle
+      - name: Build
+        run: dotnet build ChatAPI/ChatAPI.csproj --no-restore --configuration Release
+
+      # 5. API'yi arka planda başlat (CI connection string ile)
+      - name: Start ChatAPI
+        env:
+          ConnectionStrings__DefaultConnection: >-
+            Server=localhost,1433;
+            Database=ChatDb;
+            User Id=sa;
+            Password=LoadTest@2024!;
+            TrustServerCertificate=True;
+            Encrypt=False;
+            Max Pool Size=300;
+            Min Pool Size=10;
+          ASPNETCORE_URLS: "http://localhost:5000"
+          ASPNETCORE_ENVIRONMENT: "Production"
+        run: |
+          dotnet run \
+            --project ChatAPI/ChatAPI.csproj \
+            --configuration Release \
+            --no-build \
+            &
+          echo "API_PID=$!" >> $GITHUB_ENV
+
+      # 6. API hazır olana kadar bekle
+      - name: Wait for API to be ready
+        run: |
+          echo "API başlaması bekleniyor..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5000/api/rooms > /dev/null 2>&1; then
+              echo "✅ API hazır (${i}. denemede)"
+              exit 0
+            fi
+            echo "⏳ Bekleniyor... ($i/30)"
+            sleep 3
+          done
+          echo "❌ API 90 saniyede başlamadı"
+          exit 1
+
+      # 7. k6 kur
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring \
+            --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+            --keyserver hkp://keyserver.ubuntu.com:80 \
+            --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] \
+            https://dl.k6.io/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+      # 8. reports klasörünü oluştur
+      - name: Create reports directory
+        run: mkdir -p k6/reports
+
+      # 9. k6 testi çalıştır
+      - name: Run k6 load test
+        env:
+          BASE_URL: "http://localhost:5000"
+          WS_URL: "ws://localhost:5000"
+          K6_VUS: ${{ github.event.inputs.vus || '100' }}
+          K6_DURATION: ${{ github.event.inputs.duration || '60s' }}
+        run: |
+          k6 run \
+            --vus $K6_VUS \
+            --duration $K6_DURATION \
+            -e BASE_URL=$BASE_URL \
+            -e WS_URL=$WS_URL \
+            k6/load-test.js
+        continue-on-error: true   # Eşik aşılsa bile artifact yüklensin
+        id: k6_run
+
+      # 10. HTML raporu artifact olarak yükle
+      - name: Upload HTML report as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-load-test-report-${{ github.run_number }}
+          path: k6/reports/*.html
+          retention-days: 30
+
+      # 11. Raporu gh-pages branch'ine commit'le (sadece main'de)
+      - name: Deploy report to GitHub Pages
+        if: github.ref == 'refs/heads/main' && always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # gh-pages branch yoksa oluştur
+          git fetch origin gh-pages 2>/dev/null || true
+          git checkout gh-pages 2>/dev/null || git checkout --orphan gh-pages
+
+          # reports klasörünü kopyala
+          mkdir -p load-test-reports
+          cp k6/reports/*.html load-test-reports/ 2>/dev/null || true
+
+          # index.html oluştur (rapor listesi)
+          echo "<html><body><h2>k6 Load Test Reports</h2><ul>" > load-test-reports/index.html
+          for f in load-test-reports/report_*.html; do
+            name=$(basename $f)
+            echo "<li><a href='$name'>$name</a></li>" >> load-test-reports/index.html
+          done
+          echo "</ul></body></html>" >> load-test-reports/index.html
+
+          git add load-test-reports/
+          git diff --cached --quiet || \
+            git commit -m "ci: load test report — run #${{ github.run_number }}"
+          git push origin gh-pages
+        continue-on-error: true
+
+      # 12. PR'a özet yorum bırak
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const outcome = '${{ steps.k6_run.outcome }}';
+            const emoji   = outcome === 'success' ? '✅' : '⚠️';
+            const status  = outcome === 'success' ? 'Tüm eşikler geçti' : 'Bazı eşikler aşıldı';
+            const runUrl  = `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+
+            await github.rest.issues.createComment({
+              owner:    context.repo.owner,
+              repo:     context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                `## ${emoji} k6 Yük Testi Sonucu`,
+                '',
+                `**Durum:** ${status}`,
+                `**VU:** ${{ github.event.inputs.vus || '100' }}`,
+                `**Süre:** ${{ github.event.inputs.duration || '60s' }}`,
+                `**Run:** [#${{ github.run_number }}](${runUrl})`,
+                '',
+                '> Detaylı HTML rapor için Actions sekmesindeki artifact\'a bakınız.',
+              ].join('\n')
+            });
+
+      # 13. k6 başarısız olduysa pipeline'ı da başarısız say
+      - name: Check k6 result
+        if: steps.k6_run.outcome == 'failure'
+        run: |
+          echo "❌ k6 eşikleri aşıldı — pipeline başarısız sayılıyor"
+          exit 1

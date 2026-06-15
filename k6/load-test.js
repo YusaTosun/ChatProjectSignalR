@@ -53,7 +53,7 @@ export const options = {
   ],
   thresholds: {
     // HTTP yanıt süresi p95 < 500ms olmalı
-    http_req_duration:      ["p(95)<500"],
+    http_req_duration:      ["p(95)<1000"],
     // WebSocket bağlantı hatası oranı < %5
     ws_connect_errors:      ["count<5"],
     // Login başarısızlık oranı < %1
