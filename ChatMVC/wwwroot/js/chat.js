@@ -405,5 +405,95 @@ mediaInput.addEventListener('change', async () => {
 
 mediaRemoveBtn.addEventListener('click', clearPendingMedia);
 
+// ── Emoji Picker ──────────────────────────────────────────
+
+const EMOJI_DATA = {
+    '😀': ['Yüzler', ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','😗','😙','😚','🙂','🤗','🤩','🤔','🤨','😐','😑','😶','🙄','😏','😣','😥','😮','🤐','😯','😪','😫','🥱','😴','😌','😛','😜','😝','🤤','😒','😓','😔','😕','🙃','🤑','😲','🙁','😖','😞','😟','😤','😢','😭','😦','😧','😨','😩','🤯','😬','😰','😱','🥵','🥶','😳','🤪','😵','🥴','😠','😡','🤬','😷','🤒','🤕','🤢','🤧','🥳','🥸','🤠','😈','👿','💀','💩','🤡','👹','👺','👻','👽','👾','🤖']],
+    '👍': ['El & Beden', ['👍','👎','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','☝️','👋','🤚','🖐️','✋','🖖','👏','🙌','🤲','🤝','🙏','✍️','💪','🦾','🦿','🦵','🦶','👂','🦻','👃','🫀','🫁','🧠','🦷','🦴','👁️','👀']],
+    '❤️': ['Kalpler', ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','❤️‍🔥','❤️‍🩹','💔','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☯️','💋','💯','💢','💥','💫','💦','💨','🕳️','💬','💭','💤']],
+    '🐶': ['Hayvanlar', ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🐘','🦏','🦛','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐈‍⬛','🪶','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔']],
+    '🍎': ['Yiyecek', ['🍎','🍊','🍋','🍇','🍓','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🫑','🧄','🧅','🥔','🍠','🌽','🥕','🫛','🧆','🥚','🍳','🥘','🍲','🫕','🥣','🥗','🍿','🧈','🥞','🧇','🍖','🍗','🥩','🥓','🌭','🍔','🍟','🍕','🫓','🥪','🥙','🧆','🌮','🌯','🫔','🥫','🍝','🍜','🍛','🍣','🍱','🥟','🦪','🍤','🍙','🍚','🍘','🍥','🥮','🍢','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🍯','🧃','🥤','🧋','☕','🫖','🍵','🧉','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🍾']],
+    '⚽': ['Spor & Aktivite', ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🏓','🏸','🏒','🥊','⛳','🎯','🎳','🏹','🎣','🤿','🎽','🎿','🛷','🥌','🏋️','⛹️','🤺','🤼','🤸','⛷️','🏂','🏊','🚣','🧘','🛹','🛷','🤾','🏌️','🏇','🧗','🏄','🚵','🚴','🤽']],
+    '🌍': ['Seyahat & Yerler', ['🌍','🌎','🌏','🗺️','🧭','🏔️','⛰️','🌋','🗻','🏕️','🏖️','🏜️','🏝️','🏞️','🏟️','🏛️','🏗️','🧱','🏘️','🏚️','🏠','🏡','🏢','🏣','🏤','🏥','🏦','🏨','🏩','🏪','🏫','🏬','🏭','🏯','🏰','💒','🗼','🗽','⛪','🕌','🛕','🕍','⛩️','🕋','⛲','⛺','🌁','🌃','🌄','🌅','🌆','🌇','🌉','♨️','🎠','🎡','🎢','✈️','🚀','🛸','🚁','⛵','🚢','🚂','🚃','🚄','🚅','🚆','🚇','🚈','🚉','🚊','🚝','🚞','🚋','🚌','🚍','🚎','🚐','🚑','🚒','🚓','🚔','🚕','🚖','🚗','🚘','🚙','🛻','🚚','🚛','🚜','🏎️','🏍️','🛵','🦽','🦼','🛺','🚲','🛴','🛹','🛼','🚏','🛣️','🛤️','⛽','🚨','🚥','🚦','🚧','⚓']],
+    '💡': ['Nesneler', ['💡','🔦','🕯️','🪔','💰','💴','💵','💸','💳','💎','⚖️','🧰','🔧','🪛','🔨','⛏️','⚙️','🗜️','🔩','🪤','🧲','💣','🔫','🪃','🛡️','🪚','🔪','🗡️','⚔️','🪜','🧲','🪣','🛁','🪠','🧺','🧹','🪤','🪣','🗑️','📦','📫','📬','📭','📮','🗳️','📝','📄','📃','📋','📁','📂','🗂️','📅','📆','🗒️','📇','📈','📉','📊','📌','📍','🗺️','📎','🖇️','✂️','🗃️','🗄️','🖨️','⌨️','🖱️','💾','💿','📀','📱','☎️','📞','📟','📠','📺','📷','📸','📹','🎥','📽️','🎞️','📡','🔋','🔌','💡','🔦','🕯️','🧯','🪙']],
+    '🎉': ['Semboller & Etkinlik', ['🎉','🎊','🎈','🎁','🎀','🎗️','🎟️','🎫','🏆','🥇','🥈','🥉','🏅','🎖️','🎪','🤹','🎭','🎨','🎬','🎤','🎧','🎼','🎵','🎶','🎹','🥁','🪘','🎷','🎺','🎸','🪕','🎻','🎲','♟️','🎯','🎳','🎮','🕹️','🧩','🧸','🪀','🪁','🃏','🀄','🎴','🔮','🪬','🧿','🪄','🧸','🎭','✨','🌟','⭐','🌠','🎇','🎆','🌈','☀️','🌤️','⛅','🌥️','🌦️','🌧️','⛈️','🌩️','🌨️','❄️','☃️','⛄','🌬️','💧','💦','🌊','🌀','🌈','🌂','⛱️','⚡','🔥','💥','✨','🌸','🌺','🌼','🌻','🌹','🥀','🌷','🌱','🌿','☘️','🍀','🎋','🎍','🍃','🍂','🍁','🌾']]
+};
+
+const emojiBtn      = document.getElementById('emoji-btn');
+const emojiPicker   = document.getElementById('emoji-picker');
+const emojiGrid     = document.getElementById('emoji-grid');
+const emojiSearch   = document.getElementById('emoji-search');
+const emojiCats     = document.getElementById('emoji-categories');
+
+let emojiOpen = false;
+let activeCat = Object.keys(EMOJI_DATA)[0];
+
+function buildCategoryBar() {
+    emojiCats.innerHTML = Object.entries(EMOJI_DATA).map(([icon, [label]]) =>
+        `<button class="emoji-cat-btn${icon === activeCat ? ' active' : ''}" data-cat="${icon}" title="${label}">${icon}</button>`
+    ).join('');
+    emojiCats.querySelectorAll('.emoji-cat-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            activeCat = btn.dataset.cat;
+            emojiSearch.value = '';
+            emojiCats.querySelectorAll('.emoji-cat-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderGrid(EMOJI_DATA[activeCat][1]);
+        });
+    });
+}
+
+function renderGrid(emojis) {
+    emojiGrid.innerHTML = emojis.map(e =>
+        `<button class="emoji-item" title="${e}">${e}</button>`
+    ).join('');
+    emojiGrid.querySelectorAll('.emoji-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const pos = messageInput.selectionStart ?? messageInput.value.length;
+            const val = messageInput.value;
+            messageInput.value = val.slice(0, pos) + btn.textContent + val.slice(pos);
+            messageInput.setSelectionRange(pos + btn.textContent.length, pos + btn.textContent.length);
+            messageInput.focus();
+        });
+    });
+}
+
+function openEmojiPicker() {
+    emojiOpen = true;
+    emojiBtn.classList.add('active');
+    emojiPicker.hidden = false;
+    buildCategoryBar();
+    renderGrid(EMOJI_DATA[activeCat][1]);
+    emojiSearch.value = '';
+    emojiSearch.focus();
+}
+
+function closeEmojiPicker() {
+    emojiOpen = false;
+    emojiBtn.classList.remove('active');
+    emojiPicker.hidden = true;
+}
+
+emojiBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    emojiOpen ? closeEmojiPicker() : openEmojiPicker();
+});
+
+emojiSearch.addEventListener('input', () => {
+    const q = emojiSearch.value.trim().toLowerCase();
+    if (!q) {
+        renderGrid(EMOJI_DATA[activeCat][1]);
+        return;
+    }
+    const allEmojis = Object.values(EMOJI_DATA).flatMap(([, list]) => list);
+    renderGrid(allEmojis.filter(e => e.includes(q)));
+});
+
+document.addEventListener('click', (e) => {
+    if (emojiOpen && !emojiPicker.contains(e.target) && e.target !== emojiBtn) {
+        closeEmojiPicker();
+    }
+});
+
 // ── Sayfa açılışında bağlan ───────────────────────────────
 initConnection();

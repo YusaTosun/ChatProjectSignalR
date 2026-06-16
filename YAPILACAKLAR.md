@@ -28,7 +28,7 @@
 
 ## Küçük İyileştirmeler
 
-- [ ] **Emoji picker** — mesaj alanına emoji butonu ekle
+- [x] **Emoji picker** — mesaj alanına emoji butonu ekle
 - [ ] **Kod bloğu rendering** — backtick ile yazılan mesajlarda syntax highlighting (highlight.js veya Prism)
 - [ ] **Dark mode** — CSS variables zaten var, toggle eklenebilir
 - [ ] **Oda yönetimi** — oda silme, düzenleme, üye ekleme/çıkarma
