@@ -554,9 +554,134 @@ input[type="text"]:disabled { opacity: .45; cursor: not-allowed; }
 ::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--c-muted); }
 
+/* ── Hamburger Toggle ──────────────────────────────────── */
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sidebar-toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: var(--r-sm);
+    flex-shrink: 0;
+}
+
+.sidebar-toggle span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--c-text);
+    border-radius: 2px;
+    transition: transform .25s, opacity .25s;
+}
+
+.sidebar-toggle.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.sidebar-toggle.open span:nth-child(2) { opacity: 0; }
+.sidebar-toggle.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* ── Sidebar Backdrop ──────────────────────────────────── */
+#sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    z-index: 19;
+}
+
+#sidebar-backdrop.visible { display: block; }
+
 /* ── Responsive ────────────────────────────────────────── */
-@media (max-width: 640px) { #sidebar { width: 220px; } .msg { max-width: 85%; } }
-@media (max-width: 480px) { #sidebar { display: none; } }
+
+/* Tablet */
+@media (max-width: 900px) {
+    #sidebar { width: 240px; }
+    .msg { max-width: 80%; }
+    #emoji-picker { width: 320px; }
+}
+
+/* Mobile */
+@media (max-width: 650px) {
+    /* Hamburger görünür */
+    .sidebar-toggle { display: flex; }
+
+    /* Sidebar drawer olarak soldan kayar */
+    #sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 280px;
+        z-index: 20;
+        transform: translateX(-100%);
+        transition: transform .25s ease;
+        overflow-y: auto;
+    }
+
+    #sidebar.open {
+        transform: translateX(0);
+    }
+
+    /* Chat tam genişlik */
+    #layout { flex-direction: column; }
+    #chat { flex: 1; width: 100%; }
+
+    .msg { max-width: 90%; }
+
+    /* Header kompakt */
+    #app-header { padding: 0 12px; height: 52px; }
+    .header-username { display: none; }
+    #connection-text { display: none; }
+    .badge { padding: 4px 8px; }
+    .badge__dot { width: 9px; height: 9px; }
+
+    /* Input bar */
+    #input-bar { padding: 8px 10px; gap: 6px; }
+    #message-input { font-size: 16px; padding: 9px 12px; }
+
+    /* Emoji picker — tam genişlik, yukarı açılır */
+    #emoji-picker {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        border-radius: var(--r-md) var(--r-md) 0 0;
+        z-index: 50;
+        max-height: 55vh;
+    }
+
+    .emoji-picker__grid {
+        grid-template-columns: repeat(7, 1fr);
+        max-height: 36vh;
+    }
+
+    /* Mesajlar */
+    #messages { padding: 12px 10px 8px; }
+
+    /* Media preview */
+    #media-preview { padding: 6px 10px; }
+
+    /* Typing */
+    #typing-indicator { padding: 0 10px 4px; }
+
+    /* Sidebar panelleri */
+    .panel { padding: 14px; }
+}
+
+/* Küçük telefon */
+@media (max-width: 380px) {
+    .header-brand span { display: none; }
+    .btn--ghost.btn--sm { display: none; }
+    #sidebar { width: 260px; }
+}
 
 /* ── Login Page ────────────────────────────────────────── */
 .login-page {

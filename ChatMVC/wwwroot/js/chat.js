@@ -414,6 +414,36 @@ mediaInput.addEventListener('change', async () => {
 
 mediaRemoveBtn.addEventListener('click', clearPendingMedia);
 
+// ── Sidebar toggle (mobile) ───────────────────────────────
+const sidebarToggle   = document.getElementById('sidebar-toggle');
+const sidebar         = document.getElementById('sidebar');
+const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+
+function openSidebar() {
+    sidebar.classList.add('open');
+    sidebarToggle.classList.add('open');
+    sidebarBackdrop.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeSidebar() {
+    sidebar.classList.remove('open');
+    sidebarToggle.classList.remove('open');
+    sidebarBackdrop.classList.remove('visible');
+    document.body.style.overflow = '';
+}
+
+sidebarToggle.addEventListener('click', () => {
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+});
+
+sidebarBackdrop.addEventListener('click', closeSidebar);
+
+// Oda seçince mobilde sidebar kapansın
+roomsList.addEventListener('click', () => {
+    if (window.innerWidth <= 650) closeSidebar();
+});
+
 // ── Emoji Picker ──────────────────────────────────────────
 
 const EMOJI_DATA = {
