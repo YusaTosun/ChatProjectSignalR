@@ -123,6 +123,12 @@ function renderUsers(users) {
 
 // ── Message rendering ─────────────────────────────────────
 
+const EMOJI_ONLY_RE = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+$/u;
+
+function isEmojiOnly(str) {
+    return str && EMOJI_ONLY_RE.test(str.trim()) && str.trim().length > 0;
+}
+
 function appendMessage(msg) {
     const isOwn = msg.sender === currentUser;
     const el = document.createElement('div');
@@ -137,9 +143,12 @@ function appendMessage(msg) {
         }
     }
 
+    const emojiOnly = !msg.mediaUrl && isEmojiOnly(msg.content);
+    const bubbleClass = `msg__bubble${emojiOnly ? ' msg__bubble--emoji-only' : ''}`;
+
     el.innerHTML = `
         ${!isOwn ? `<div class="msg__sender">${escapeHtml(msg.sender)}</div>` : ''}
-        <div class="msg__bubble">
+        <div class="${bubbleClass}">
             ${mediaHtml}
             ${msg.content ? `<span>${escapeHtml(msg.content)}</span>` : ''}
         </div>
